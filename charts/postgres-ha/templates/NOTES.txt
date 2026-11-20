@@ -1,0 +1,11 @@
+Cluster {{ .Values.cluster.name }} outsourced to CloudNativePG operator.
+
+Status:  kubectl get cluster {{ .Values.cluster.name }} -n {{ .Release.Namespace }}
+Password:   kubectl get secret {{ .Values.cluster.name }}-app -n {{ .Release.Namespace }} -o jsonpath='{.data.password}' | base64 -d
+
+Services:
+  {{ .Values.cluster.name }}-rw      primary 
+  {{ .Values.cluster.name }}-ro      replicas
+{{- if .Values.externalService.enabled }}
+  {{ .Values.cluster.name }}-rw-ext  LoadBalancer on primary (MetalLB)
+{{- end }}

@@ -1,0 +1,30 @@
+# Test pod simulating writing to the database for demo purposes only.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pg-writer
+  namespace: postgres
+spec:
+  restartPolicy: Never
+  containers:
+    - name: psql
+      image: postgres:17
+      env:
+        - {name: PGHOST, value: pg-main-rw}
+        - {name: PGDATABASE, value: appdb}
+        - {name: PGSSLMODE, value: require}
+        - {name: PGCONNECT_TIMEOUT, value: "2"}
+        - name: PGUSER
+          valueFrom: {secretKeyRef: {name: pg-main-app, key: username}}
+        - name: PGPASSWORD
+          valueFrom: {secretKeyRef: {name: pg-main-app, key: password}}
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          until psql -tAc "CREATE TABLE IF NOT EXISTS demo(id serial, ts timestamptz default now(), msg text)"; do sleep 2; done
+          n=0
+          while true; do
+            n=$((n+1))
+            if psql -tAc "INSERT INTO demo(msg) VALUES ('$n')" >/dev/null 2>&1; then echo "OK $n"; else echo "FAIL $n"; fi
+            sleep 1
+          done

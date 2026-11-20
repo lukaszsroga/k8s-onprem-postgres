@@ -1,0 +1,70 @@
+# DEMO ONLY, S3 on-prem replacement for minikube backups. Data on emptyDir (disappears with the pod). In production, we should use external, persistent S3 outside the cluster.
+# Chainguard image as official MinIO images are no longer released. In production, we should use a different solution outside of the cluster. This solution is for demo purposes only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: minio}
+  template:
+    metadata:
+      labels: {app: minio}
+    spec:
+      containers:
+        - name: minio
+          image: cgr.dev/chainguard/minio:latest
+          command: ["minio"]
+          args: ["server", "/data", "--console-address", ":9001"]
+          envFrom:
+            - secretRef:
+                name: minio-root
+          ports:
+            - {name: api, containerPort: 9000}
+            - {name: console, containerPort: 9001}
+          readinessProbe:
+            httpGet: {path: /minio/health/ready, port: 9000}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: storage
+spec:
+  selector: {app: minio}
+  ports:
+    - {name: api, port: 9000, targetPort: 9000}
+    - {name: console, port: 9001, targetPort: 9001}
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-create-bucket
+  namespace: storage
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: cgr.dev/chainguard/minio-client:latest
+          command: ["mc"]
+          args: ["mb", "--ignore-existing", "demo/pg-backups"]
+          env:
+            - name: S3_USER
+              valueFrom: {secretKeyRef: {name: minio-root, key: MINIO_ROOT_USER}}
+            - name: S3_PASS
+              valueFrom: {secretKeyRef: {name: minio-root, key: MINIO_ROOT_PASSWORD}}
+            - name: MC_HOST_demo
+              value: "http://$(S3_USER):$(S3_PASS)@minio.storage.svc:9000"

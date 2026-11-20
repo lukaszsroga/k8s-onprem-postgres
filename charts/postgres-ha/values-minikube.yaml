@@ -1,0 +1,12 @@
+# For local testing on minikube. The topology (3 instances, anti-affinity, synchronous replication) remains the same as in production.
+cluster:
+  storage:
+    size: 2Gi
+    storageClass: csi-hostpath-wffc 
+  resources:
+    requests: {cpu: "250m", memory: 512Mi}
+    limits:   {cpu: "250m", memory: 512Mi}
+  postgresql:
+    parameters:
+      shared_buffers: "128MB"
+      effective_cache_size: "256MB"
